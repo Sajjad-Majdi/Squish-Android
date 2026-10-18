@@ -5,12 +5,13 @@ import kotlin.math.max
 
 /**
  * Picture quality on a 0–100 scale. Pinch measures SSIM on the luma of matching frames and maps
- * it to a VMAF-like score; the map was fitted with libvmaf on real phone footage. 94 is about the
- * point where nobody can tell the copy from the original on a phone.
+ * it to a VMAF-like score; the map was fitted with libvmaf on real phone footage. 95 is about the
+ * point where nobody can tell the copy from the original on a phone. This map is for photos;
+ * videos use [VideoScore], which also accounts for the source's noise.
  */
 object Quality {
     /** What each quality level aims for: pristine, no visible loss, balanced, compact. */
-    val TARGETS = floatArrayOf(97f, 94f, 88f, 80f)
+    val TARGETS = floatArrayOf(97f, 95f, 88f, 80f)
 
     /** Lower edges of the result words: pristine, no visible loss, slight, visible, heavy. */
     private val BANDS = floatArrayOf(96.5f, 92.5f, 86f, 76f)
