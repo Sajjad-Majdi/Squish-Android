@@ -1,0 +1,145 @@
+{
+  "densities": [
+    {
+      "density": "mdpi",
+      "name": "foreground",
+      "pixels": 108,
+      "bytes": 3212,
+      "transparentPixels": 9419,
+      "maxVisibleRadiusDp": 32.6,
+      "sha256": "93a9366839a187ec8a737fd50f3d1d999ef54ef3571f52fac7cd7b0aea8368d6"
+    },
+    {
+      "density": "mdpi",
+      "name": "background",
+      "pixels": 108,
+      "bytes": 3343,
+      "transparentPixels": 0,
+      "maxVisibleRadiusDp": 75.66,
+      "sha256": "72f1c3d3cd6a5ee82e2e903718c18965ab5b8806ce5626ae7febbfee0a0e3739"
+    },
+    {
+      "density": "mdpi",
+      "name": "monochrome",
+      "pixels": 108,
+      "bytes": 2295,
+      "transparentPixels": 10228,
+      "maxVisibleRadiusDp": 32.6,
+      "sha256": "194908a87ecc9e11e20b16b067a8be55d30f8c431b08e6dba8a6925500a2775d"
+    },
+    {
+      "density": "hdpi",
+      "name": "foreground",
+      "pixels": 162,
+      "bytes": 5052,
+      "transparentPixels": 21287,
+      "maxVisibleRadiusDp": 32.65,
+      "sha256": "173421fba2a9bec8f589e4c0757bff8c2d6c4af9cb87defe3f7fe66fdcf011e2"
+    },
+    {
+      "density": "hdpi",
+      "name": "background",
+      "pixels": 162,
+      "bytes": 5009,
+      "transparentPixels": 0,
+      "maxVisibleRadiusDp": 75.9,
+      "sha256": "fd6da882519b7b4ce395466af590a9e0d87533e75ceb07798d4d0f99f3432766"
+    },
+    {
+      "density": "hdpi",
+      "name": "monochrome",
+      "pixels": 162,
+      "bytes": 3410,
+      "transparentPixels": 23268,
+      "maxVisibleRadiusDp": 32.65,
+      "sha256": "d41b9d096208edad3909f2c459537648853075a930ac30d0dfa6866602f62a31"
+    },
+    {
+      "density": "xhdpi",
+      "name": "foreground",
+      "pixels": 216,
+      "bytes": 7169,
+      "transparentPixels": 37918,
+      "maxVisibleRadiusDp": 32.68,
+      "sha256": "558a301d5fd1aa65ce21bceb6d1d673642e7e240c44318086b4496584dc2fd41"
+    },
+    {
+      "density": "xhdpi",
+      "name": "background",
+      "pixels": 216,
+      "bytes": 6869,
+      "transparentPixels": 0,
+      "maxVisibleRadiusDp": 76.01,
+      "sha256": "9728db120a17142296354c0b691a3727db8a0dc8afeaf8a4cc245a6920360ca6"
+    },
+    {
+      "density": "xhdpi",
+      "name": "monochrome",
+      "pixels": 216,
+      "bytes": 4402,
+      "transparentPixels": 41852,
+      "maxVisibleRadiusDp": 32.68,
+      "sha256": "66fbcb4ea9fba8a82bb7ea249aa07dcda531644381080d25f26e4f0b079f8365"
+    },
+    {
+      "density": "xxhdpi",
+      "name": "foreground",
+      "pixels": 324,
+      "bytes": 12057,
+      "transparentPixels": 85731,
+      "maxVisibleRadiusDp": 32.16,
+      "sha256": "3810f5bab1166500f9f24d5ef54ac2b5a9ee03840b0b5ee9ba6cf2796ab49d1a"
+    },
+    {
+      "density": "xxhdpi",
+      "name": "background",
+      "pixels": 324,
+      "bytes": 10620,
+      "transparentPixels": 0,
+      "maxVisibleRadiusDp": 76.13,
+      "sha256": "fe1693370a0907a2b2e2815e1a08fbf4208d0e841765ea19664d2c0b63a64113"
+    },
+    {
+      "density": "xxhdpi",
+      "name": "monochrome",
+      "pixels": 324,
+      "bytes": 6703,
+      "transparentPixels": 95062,
+      "maxVisibleRadiusDp": 32.16,
+      "sha256": "0c6b57c28dd34566b4d7a7bf56f361a853e96dbcddf1f34d7d072375c122513b"
+    },
+    {
+      "density": "xxxhdpi",
+      "name": "foreground",
+      "pixels": 432,
+      "bytes": 17978,
+      "transparentPixels": 152554,
+      "maxVisibleRadiusDp": 32.23,
+      "sha256": "e7186b025a5822445c08cf2b3045a3d3377349d440c228a946de215fc4edb7a6"
+    },
+    {
+      "density": "xxxhdpi",
+      "name": "background",
+      "pixels": 432,
+      "bytes": 14771,
+      "transparentPixels": 0,
+      "maxVisibleRadiusDp": 76.19,
+      "sha256": "715782d67b5c4611b6c8aec98e74f6d99ac2273eebc7402c28e1c8aba91b8b78"
+    },
+    {
+      "density": "xxxhdpi",
+      "name": "monochrome",
+      "pixels": 432,
+      "bytes": 8830,
+      "transparentPixels": 169996,
+      "maxVisibleRadiusDp": 32.23,
+      "sha256": "91f7a92cfca271ccbc1b696033309076760e04eba1234ed7c2155c2cc182f7f8"
+    }
+  ],
+  "foregroundSafeCircleDp": 63.4,
+  "canvasDp": 108,
+  "maskViewportDp": 72,
+  "launcherPngBytes": 111720,
+  "otherSourceFilesUnchanged": [],
+  "resourceCompilation": "PASS: Android aapt2 36.0.0 compile --dir app/src/main/res"
+}
