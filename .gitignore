@@ -1,0 +1,11 @@
+Source Code/.gradle/
+Source Code/build/
+Source Code/app/build/
+Source Code/.kotlin/
+Source Code/local.properties
+Source Code/android/key.properties
+Source Code/android/*.p12
+Source Code/android/*.jks
+.idea/
+*.iml
+Executables/*.apk
