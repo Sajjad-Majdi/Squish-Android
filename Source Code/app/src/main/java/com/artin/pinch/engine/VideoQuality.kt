@@ -54,12 +54,18 @@ object VideoQuality {
         grab(openOut, times, cw, ch, GlPipe.HDR_NONE, cancelled) { _, pts, y -> outPts += pts + shift; outY += y }
         if (outPts.isEmpty()) return -1f
         var sum = 0.0
+        var noise = 0.0
         var n = 0
         grab(openSrc, outPts.toLongArray(), cw, ch, GlPipe.hdrOf(info.transfer), cancelled) { i, pts, y ->
-            if (abs(pts - outPts[i]) <= 20_000) { sum += Quality.ssim(outY[i], y, cw, ch); n++ }
+            if (abs(pts - outPts[i]) <= 20_000) {
+                sum += Quality.ssim(outY[i], y, cw, ch)
+                noise += VideoScore.noiseDb(y, cw, ch)
+                n++
+            }
         }
         if (n == 0) return -1f
-        return Quality.score(Quality.db(sum / n))
+        val f = VideoScore.of(m) ?: VideoScore.Features(noise / n, VideoScore.TYPICAL.motion)
+        return VideoScore.score(Quality.db(sum / n), f)
     }
 
     /**
@@ -75,6 +81,10 @@ object VideoQuality {
         private val d2: Double,
         private val lo: Int,
         private val hi: Int,
+        /** Grain and motion of the source; they move the SSIM a quality level needs. */
+        val features: VideoScore.Features,
+        /** Whether the probe ran with B-frames, so the full encode must too. */
+        val bFrames: Boolean,
     ) : Forecast {
         private val slope = ((d1 - d2) / (ln(b1.toDouble() / b2) / ln(2.0))).let { if (it in 0.6..4.0) it else SLOPE }
         private val cache = HashMap<Float, Planner.VideoPlan?>()
@@ -82,7 +92,7 @@ object VideoQuality {
         /** Full-size plan for [target], or null when the source is already that small. */
         @Synchronized
         fun planFor(target: Float): Planner.VideoPlan? = cache.getOrPut(target) {
-            val tDb = Quality.dbFor(target)
+            val tDb = VideoScore.needDb(target, features)
             // Read off the line from the nearer probe.
             val (b, d) = if (abs(tDb - d1) <= abs(tDb - d2)) b1 to d1 else b2 to d2
             // A little headroom: the full encode has more scene changes than three short slices.
@@ -114,18 +124,23 @@ object VideoQuality {
         val every = max(1, (top.fps * 0.3f).roundToInt())
         val refPts = ArrayList<Long>()
         val refY = ArrayList<ByteArray>()
+        val nextY = ArrayList<ByteArray>()
         val tmp = File.createTempFile("probe", ".mp4", ctx.cacheDir)
         val lo = max(enc.video.bitrateRange.lower, 150_000)
         val hi = enc.video.bitrateRange.upper
         var step = 0
 
-        fun probe(b: Int): Double {
+        var reordered = false
+        fun probe(b: Int, bf: Boolean): Double {
             val first = refPts.isEmpty()
-            val start = encodeSlices(ctx, m, info, top, b, ranges, tmp, cw, ch, if (first) every else 0, refPts, refY, cancelled) {
+            // MediaMuxer does not truncate an existing file; old bytes after the new moov break the read-back.
+            tmp.delete()
+            val sl = encodeSlices(ctx, m, info, top, b, bf, ranges, tmp, cw, ch, if (first) every else 0, refPts, refY, nextY, cancelled) {
                 progress(it * 0.8f)
             }
+            reordered = sl.reordered
             val openTmp: (MediaExtractor) -> Unit = { it.setDataSource(tmp.path) }
-            val shift = start - firstPts(openTmp)
+            val shift = sl.start - firstPts(openTmp)
             var sum = 0.0
             var n = 0
             grab(openTmp, LongArray(refPts.size) { refPts[it] - shift }, cw, ch, GlPipe.HDR_NONE, cancelled) { i, pts, y ->
@@ -139,13 +154,51 @@ object VideoQuality {
 
         try {
             val b1 = top.bitrate
-            val d1 = probe(b1)
-            Log.i(TAG, "${m.name}: ${b1 / 1000}k → ${"%.2f".format(d1)} dB (source ${info.videoBitrate / 1000}k)")
-            return Curve(info, preferHevc, b1, d1, b1, d1, lo, hi)
+            var bf = BFrames.mayTry(ctx, enc)
+            val d1 = if (!bf) probe(b1, false) else try {
+                probe(b1, true).also {
+                    // Proven only by frames that really came out of order; an encoder that ignores
+                    // the request is remembered too, so it is not asked again.
+                    BFrames.probed(ctx, enc, reordered)
+                    if (!reordered) bf = false
+                }
+            } catch (t: Exception) {
+                if (t is Cancelled) throw t
+                Log.w(TAG, "B-frame probe failed on ${enc.info.name}; this file goes without them", t)
+                BFrames.failed(ctx, enc)
+                bf = false
+                refPts.clear(); refY.clear(); nextY.clear()
+                probe(b1, false)
+            }
+            val noise = refY.map { VideoScore.noiseDb(it, cw, ch) }.average()
+            val motion = nextY.indices.map { VideoScore.motion(refY[it], nextY[it], cw, ch) }.average()
+            val f = VideoScore.Features(
+                if (noise.isNaN()) VideoScore.TYPICAL.noise else noise,
+                if (motion.isNaN()) VideoScore.TYPICAL.motion else motion,
+            )
+            VideoScore.remember(m, f)
+            // The first probe is only a guess; when the default level ("no visible loss") lies far
+            // from it, a second probe near that level measures the real slope instead of assuming it.
+            var b2 = b1
+            var d2 = d1
+            val want = VideoScore.needDb(Quality.TARGETS[1], f)
+            if (abs(want - d1) > 1.0) {
+                val guess = (b1 * 2.0.pow((want - d1) / SLOPE).coerceIn(0.25, 4.0)).roundToInt().coerceIn(lo, hi)
+                if (guess != b1) runCatching { probe(guess, bf) }
+                    .onSuccess { b2 = guess; d2 = it }
+                    .onFailure { if (it is Cancelled) throw it; Log.w(TAG, "second probe failed", it) }
+            }
+            Log.i(TAG, "${m.name}: ${b1 / 1000}k → ${"%.2f".format(d1)} dB, ${b2 / 1000}k → ${"%.2f".format(d2)} dB, " +
+                "want ${"%.2f".format(want)}, noise ${"%.1f".format(f.noise)} dB, motion ${"%.1f".format(f.motion)}, " +
+                "bframes $bf (source ${info.videoBitrate / 1000}k)")
+            return Curve(info, preferHevc, b1, d1, b2, d2, lo, hi, f, bf)
         } finally {
             tmp.delete()
         }
     }
+
+    /** First frame time of a probe encode, and whether its frames came out of order (B-frames). */
+    private class Slices(val start: Long, val reordered: Boolean)
 
     /** Three 1.2-second slices at 20 %, 50 % and 80 %; short clips are probed from the start (up to 3.6 s). */
     private fun ranges(dur: Long): List<LongArray> =
@@ -183,6 +236,7 @@ object VideoQuality {
         info: VideoInfo,
         plan: Planner.VideoPlan,
         bitrate: Int,
+        bFrames: Boolean,
         ranges: List<LongArray>,
         out: File,
         cw: Int,
@@ -190,9 +244,10 @@ object VideoQuality {
         every: Int,
         refPts: MutableList<Long>,
         refY: MutableList<ByteArray>,
+        nextY: MutableList<ByteArray>,
         cancelled: () -> Boolean,
         progress: (Float) -> Unit,
-    ): Long {
+    ): Slices {
         val ex = MediaExtractor()
         var dec: MediaCodec? = null
         var enc: MediaCodec? = null
@@ -206,7 +261,7 @@ object VideoQuality {
             ex.selectTrack(vt)
             val fmt = ex.getTrackFormat(vt)
             val mx = MediaMuxer(out.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4).also { mux = it }
-            val ec = CodecKit.encoder(plan.enc, plan.width, plan.height, plan.fps, bitrate).also { enc = it }
+            val ec = CodecKit.encoder(plan.enc, plan.width, plan.height, plan.fps, bitrate, bFrames).also { enc = it }
             val s = ec.createInputSurface().also { es = it }
             val g = GlPipe(s, plan.width, plan.height, info.width, info.height, GlPipe.hdrOf(info.transfer)).also { gl = it }
             val dc = CodecKit.decoder(fmt, g.inputSurface).also { dec = it }
@@ -226,6 +281,10 @@ object VideoQuality {
             var n = 0
             var start = -1L
             var lastMove = SystemClock.uptimeMillis()
+            var maxPts = Long.MIN_VALUE
+            var reordered = false
+            // The frame ~33 ms after each reference, for the motion feature (60 fps skips one).
+            val gap = max(1, (info.fps / 30f).roundToInt())
 
             fun drain(wait: Long) {
                 var timeout = wait
@@ -244,6 +303,8 @@ object VideoQuality {
                         val b = ec.getOutputBuffer(o)!!
                         b.position(eInfo.offset); b.limit(eInfo.offset + eInfo.size)
                         mx.writeSampleData(vOut, b, eInfo)
+                        if (eInfo.presentationTimeUs < maxPts) reordered = true
+                        maxPts = max(maxPts, eInfo.presentationTimeUs)
                     }
                     val eos = eInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     ec.releaseOutputBuffer(o, false)
@@ -282,6 +343,10 @@ object VideoQuality {
                     g.awaitFrame()
                     if (start < 0) start = pts
                     if (every > 0 && n % every == every / 2) { refPts += pts; refY += g.grab(cw, ch) }
+                    if (every > 0 && n % every == every / 2 + gap && nextY.size == refY.size - 1) {
+                        // Only a true neighbour: a slice may end between the two.
+                        if (pts - refPts.last() <= 100_000) nextY += g.grab(cw, ch) else { refPts.removeAt(refPts.lastIndex); refY.removeAt(refY.lastIndex) }
+                    }
                     g.draw(pts * 1000)
                     n++
                     progress(((doneUs + pts - ranges[r][0]) / total).coerceIn(0f, 1f))
@@ -302,7 +367,7 @@ object VideoQuality {
             }
             check(started) { "probe encoded nothing" }
             mx.stop()
-            return start
+            return Slices(start, reordered)
         } finally {
             runCatching { dec?.stop() }; runCatching { dec?.release() }
             runCatching { enc?.stop() }; runCatching { enc?.release() }

@@ -42,14 +42,33 @@ class VideoCompressor(
         var keep = false
         try {
             var score = -1f
+            var bf = BFrames.use(ctx, plan.enc)
             val size = ctx.contentResolver.openFileDescriptor(out, "rw")!!.use { pfd ->
-                transcode(pfd.fileDescriptor)
-                val sz = pfd.statSize
-                if (sz > 0 && sz < m.size * 0.97) {
-                    checking()
-                    score = runCatching {
-                        VideoQuality.measure(ctx, m, info, { it.setDataSource(pfd.fileDescriptor) }, cancelled)
-                    }.getOrElse { if (it is Cancelled) throw it; Log.w(TAG, "quality check failed", it); -1f }
+                fun encodeAndCheck(): Long {
+                    transcode(pfd.fileDescriptor, bf)
+                    val sz = pfd.statSize
+                    if (sz > 0 && sz < m.size * 0.97) {
+                        checking()
+                        score = runCatching {
+                            VideoQuality.measure(ctx, m, info, { it.setDataSource(pfd.fileDescriptor) }, cancelled)
+                        }.getOrElse { if (it is Cancelled) throw it; Log.w(TAG, "quality check failed", it); -1f }
+                    }
+                    return sz
+                }
+                var sz = runCatching { encodeAndCheck() }.getOrElse {
+                    if (it is Cancelled || !bf) throw it
+                    Log.w(TAG, "encode with B-frames failed", it); -1L
+                }
+                // A copy that cannot be read back, or reads back as garbage, is redone without
+                // B-frames, and this encoder never gets them again.
+                if (bf && (sz <= 0 || score in 0f..10f || (score < 0f && sz < m.size * 0.97))) {
+                    Log.w(TAG, "B-frame output rejected (size $sz, score $score); redoing without")
+                    BFrames.failed(ctx, plan.enc)
+                    bf = false
+                    score = -1f
+                    android.system.Os.ftruncate(pfd.fileDescriptor, 0)
+                    android.system.Os.lseek(pfd.fileDescriptor, 0, android.system.OsConstants.SEEK_SET)
+                    sz = encodeAndCheck()
                 }
                 sz
             }
@@ -62,7 +81,7 @@ class VideoCompressor(
         }
     }
 
-    private fun transcode(fd: FileDescriptor) {
+    private fun transcode(fd: FileDescriptor, bFrames: Boolean) {
         val vEx = MediaExtractor()
         var aEx: MediaExtractor? = null
         var dec: MediaCodec? = null
@@ -101,7 +120,7 @@ class VideoCompressor(
             if (info.rotation != 0) mx.setOrientationHint(info.rotation)
             if (keepLocation) location()?.let { (la, lo) -> runCatching { mx.setLocation(la, lo) } }
 
-            val ec = CodecKit.encoder(plan.enc, plan.width, plan.height, plan.fps, plan.bitrate).also { enc = it }
+            val ec = CodecKit.encoder(plan.enc, plan.width, plan.height, plan.fps, plan.bitrate, bFrames).also { enc = it }
             val es = ec.createInputSurface().also { encSurface = it }
             val g = GlPipe(es, plan.width, plan.height, srcW, srcH, hdrMode()).also { gl = it }
             val dc = CodecKit.decoder(inFmt, g.inputSurface).also { dec = it }
@@ -125,6 +144,8 @@ class VideoCompressor(
             var nextKeep = Double.NaN
             var lastP = -1f
             var lastMove = SystemClock.uptimeMillis()
+            // With B-frames the encoder hands frames over out of order; audio follows the latest time seen.
+            var maxPts = Long.MIN_VALUE
 
             fun pumpAudio(until: Long) {
                 val ex = aEx ?: return
@@ -165,7 +186,8 @@ class VideoCompressor(
                         b.position(eInfo.offset)
                         b.limit(eInfo.offset + eInfo.size)
                         mx.writeSampleData(vOut, b, eInfo)
-                        if (aOut >= 0) pumpAudio(eInfo.presentationTimeUs)
+                        maxPts = max(maxPts, eInfo.presentationTimeUs)
+                        if (aOut >= 0) pumpAudio(maxPts)
                     }
                     val eos = eInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     ec.releaseOutputBuffer(o, false)

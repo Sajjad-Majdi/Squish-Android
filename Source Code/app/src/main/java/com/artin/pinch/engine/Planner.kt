@@ -127,10 +127,11 @@ object Planner {
         val (fw, fh) = Codecs.fit(enc, info.width, info.height)
         val px = fw.toDouble() * fh
         val fps = info.fps.toDouble()
-        // ~0.065 bits per pixel reaches 94 on 1080p30 with phone HEVC hardware; H.264 needs ~45 % more.
-        // Bigger frames and higher frame rates need fewer bits per pixel.
-        val guess = (if (enc.hevc) 0.065 else 0.094) *
-            2.0.pow((Quality.dbFor(target) - Quality.dbFor(94f)) / 1.9) *
+        // ~0.04 bits per pixel reaches VMAF 95 on 1080p30 daylight footage with phone HEVC hardware
+        // (0.065 was the old, much stricter SSIM aim); H.264 needs ~45 % more. Only the first probe's
+        // guess: the probe measures the real curve. Bigger frames and higher frame rates need fewer bits per pixel.
+        val guess = (if (enc.hevc) 0.04 else 0.058) *
+            2.0.pow((Quality.dbFor(target) - Quality.dbFor(95f)) / 1.9) *
             (2_073_600 / px).pow(0.2) * (30.0 / fps).pow(0.3) * px * fps
         val br = (bitrate ?: guess.roundToInt()).coerceIn(enc.video.bitrateRange.lower, enc.video.bitrateRange.upper)
         val durS = info.durationUs / 1e6
