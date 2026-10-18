@@ -30,6 +30,7 @@ class Strings(val fa: Boolean) {
     fun scoreAtLeast(q: Float) = t("Quality ${num(Math.round(q))}+", "کیفیت ${num(Math.round(q))} به بالا")
     fun measuring(i: Int, n: Int) = t("Measuring ${num(i)}/${num(n)}", "سنجش ${num(i)} از ${num(n)}")
     val optimal = t("Optimal", "بهینه")
+    val fifthSize = t("20% size", "۲۰٪ حجم")
     val stages = listOf(t("Measuring quality", "سنجش کیفیت"), t("Compressing", "فشرده‌سازی"), t("Checking quality", "بررسی کیفیت"))
     /** Points from the old size to the new one in either reading direction. */
     val arrow = if (fa) "  ←  " else "  →  "

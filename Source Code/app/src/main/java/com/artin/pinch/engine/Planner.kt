@@ -87,7 +87,10 @@ object Planner {
         val durS = info.durationUs / 1e6
         val src = info.videoBitrate.toDouble()
         val target = (src * (1 - s)).coerceAtLeast(MIN_BITRATE).coerceAtMost(max(src, MIN_BITRATE))
-        val bppMin = if (enc.hevc) 0.06 else 0.09
+        // Full resolution almost always looks better than a smaller frame at the same bytes (measured on
+        // phone clips at 20 % of their size: 1080p beat 900p/720p/540p; screen recordings shrunk to 720p
+        // went from VMAF 96 to 80). So the frame shrinks only at extreme settings.
+        val bppMin = if (enc.hevc) 0.015 else 0.022
         val w = info.width
         val h = info.height
         var fps = info.fps
