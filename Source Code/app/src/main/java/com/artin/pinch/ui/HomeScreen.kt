@@ -287,8 +287,8 @@ private fun PickState(start: () -> Unit) {
                     Box(
                         Modifier.press(radius = 18.dp) { Prefs.strength = v; Prefs.saveStrength() }
                             .then(if (sel) Modifier.glossy() else Modifier.glass(18.dp, depth = 6.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    ) { Txt(s.pct(v), t.small, if (sel) p.onAccent else p.text) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) { Txt(if (v == FIFTH) s.fifthSize else s.pct(v), t.small, if (sel) p.onAccent else p.text) }
                 }
             }
         }
@@ -300,7 +300,9 @@ private fun PickState(start: () -> Unit) {
     }
 }
 
-private val PRESETS = listOf(0.5f, 0.75f, 0.9f, 0.98f)
+private val PRESETS = listOf(0.5f, 0.75f, 0.8f, 0.9f, 0.98f)
+/** The preset named by what is left: a fifth of the size. */
+private const val FIFTH = 0.8f
 private val LEVEL_MARKS = listOf(0f, 1f, 2f, 3f)
 /** A score inside each result band, for colouring the size mode's quality guess. */
 private val BAND_SCORE = floatArrayOf(98f, 94f, 89f, 80f, 60f)
